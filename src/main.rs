@@ -55,7 +55,17 @@ fn view(app: &App, model: &Model, frame: &Frame) {
 
 fn draw_results(model: &Model, draw: &nannou::app::Draw) {
 
-    let sq_col = 255.0; // model.handwrittendigitthingy
+    let sq_col = 255.0; // model.input
+    let cir_col = 255.0; // model.output
 
-    draw.quad().x_y(10.0, 10.0).color(rgb(sq_col, sq_col, sq_col));
+    for y in 0..27 {
+        for x in 0..27 {
+            draw.rect().x_y(2.0 * x as f32 - 200.0, 2.0 * y as f32 + 50.0).w_h(2.0, 2.0)
+                            .color(rgb(sq_col, sq_col, sq_col));
+        }
+    }
+    for y in 0..9 {
+        draw.ellipse().x_y(200.0, 10.0 * y as f32).radius(6.0)
+                           .color(rgb(cir_col, cir_col, cir_col));
+    }
 }
