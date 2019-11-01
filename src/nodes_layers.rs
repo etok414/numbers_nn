@@ -7,8 +7,8 @@ struct Node {
 // A node/neuron's bias and the weights of its connections to the previous layer.
     bias: f32,
     weights: Vec<f32>,
-    bias_adjust: Option<f32>,
-    weight_adjusts: Vec<f32>,
+    // bias_adjust: Option<f32>,
+    // weight_adjusts: Vec<f32>,
 }
 
 impl Node {
@@ -28,8 +28,8 @@ impl Node {
         Node {
             bias: bias,
             weights: init_weights, // vec![0.0; number_of_weights],
-            bias_adjust: None,
-            weight_adjusts: Vec::new()
+            // bias_adjust: None,
+            // weight_adjusts: Vec::new()
         }
     }
 
