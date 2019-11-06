@@ -1,3 +1,4 @@
 /target
+/datas
 cargo.lock
 **/*.rs.bk

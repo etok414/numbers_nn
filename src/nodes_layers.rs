@@ -7,12 +7,13 @@ struct Node {
 // A node/neuron's bias and the weights of its connections to the previous layer.
     bias: f32,
     weights: Vec<f32>,
+    personal_pos: usize,
     // bias_adjust: Option<f32>,
     // weight_adjusts: Vec<f32>,
 }
 
 impl Node {
-    pub fn new(number_of_weights: usize) -> Node {
+    pub fn new(number_of_weights: usize, personal_pos: usize) -> Node {
     //Generates a new node with a random bias and random weights.
         let mut rng = rand::thread_rng();
 
@@ -23,11 +24,12 @@ impl Node {
             init_weights[n] = 2.0 * x  - 1.0;  // The initial weights will be in [-1; 1[
         }
         let x: f32 = rng.gen();  // Random number in the interval [0; 1[
-        let bias = 2.0 * x  - 1.0;  // The initial weights will be in [-1; 1[
+        let init_bias = 2.0 * x  - 1.0;  // The initial weights will be in [-1; 1[
 
         Node {
-            bias: bias,
+            bias: init_bias,
             weights: init_weights, // vec![0.0; number_of_weights],
+            personal_pos: personal_pos,
             // bias_adjust: None,
             // weight_adjusts: Vec::new()
         }
@@ -97,14 +99,16 @@ impl Node {
     //     self.weight_adjusts = Vec::new();
     // }
 
-    pub fn find_delta(&self, personal_value:f32, desired_value:f32, next_layer: &Layer, next_layer_deltas: &Vec<f32>) -> f32 {
+    pub fn find_delta(&self, personal_value:f32, next_layer: &Layer, d_values: &Vec<f32>) -> f32 {
         //Finds delta and returns it.
+        //d_values stands either for desired values, a vector of the desired output values,
+        //or for delta values, a vector of the deltas of the next_layer.
         let mut delta = 0.0;
         if next_layer.node_count == 0 {
-            delta = (personal_value - desired_value) * personal_value * (1.0 - personal_value)
+            delta = (personal_value - d_values[self.personal_pos]) * personal_value * (1.0 - personal_value)
         } else {
             for num in 0..next_layer.node_count {
-                delta += next_layer_deltas[num] * next_layer.nodes[num].weights[desired_value as usize]; //If there is a next_layer, desired_value tracks which connections in it lead to the node.
+                delta += d_values[num] * next_layer.nodes[num].weights[self.personal_pos];
             }
             delta *= personal_value * (1.0 - personal_value);
         }
@@ -131,8 +135,8 @@ impl Layer {
     pub fn new(previous_layer_nodes: usize, number_of_nodes: usize) -> Layer {
     //Generates a layer of nodes, each with a random bias and a number of random weights equal to the number of nodes in the previous layer.
         let mut nodes = Vec::new();
-        for _ in 0..number_of_nodes {
-            nodes.push(Node::new(previous_layer_nodes));
+        for num in 0..number_of_nodes {
+            nodes.push(Node::new(previous_layer_nodes, num));
         }
         let node_count = nodes.len();
         Layer {
@@ -164,7 +168,7 @@ impl Layer {
     //     }
     // }
     //
-    // pub fn adjust(&mut self, learning_rate:f32) {
+    // pub fn old_adjust(&mut self, learning_rate:f32) {
     // //Calls the adjust function of every node in the layer, which does the following for the node:
     // //Changes the weights and biases after all nodes have found how they're supposed to be adjusted.
     //     for node_num in 0..self.node_count {
@@ -175,25 +179,25 @@ impl Layer {
     pub fn find_deltas(&self, values:&Vec<f32>, desired_values:&Vec<f32>, next_layer:&Layer, next_layer_deltas:&Vec<f32>) -> Vec<f32> {
     //Finds out how the nodes' weights and biases should be adjusted, based either on a list of desired values, or how the next layer is set to be adjusted.
     //The function does this by calling find_adjusts for each node.
-        let deltas = Vec::new();
+        let mut deltas = Vec::new();
         for node_num in 0..self.node_count {
             deltas.push(self.nodes[node_num].find_delta(
                                                         values[node_num],
-                                                        if next_layer.node_count > 0 {node_num as f32} //If the next layer contains anything, desired_value is used to track the position of the relevant node.
-                                                            else {desired_values[node_num]}, //Otherwise, desired_value is used to track the desired value.
                                                         next_layer,
-                                                        next_layer_deltas
+                                                        if next_layer.node_count > 0 {next_layer_deltas}
+                                                        else {desired_values}
+                                                        // else {&vec![desired_values[node_num]]}
                                                         )
                         );
         }
         deltas
     }
 
-    pub fn alt_adjust(&mut self, deltas: Vec<f32>, previous_layer_values: Vec<f32>, learning_rate: f32) {
+    pub fn adjust(&mut self, deltas: &Vec<f32>, previous_layer_values: &Vec<f32>, learning_rate: f32) {
         let previous_layer_len = previous_layer_values.len();
-        for prev_num in 0..previous_layer_len {
+        for prev_layer_num in 0..previous_layer_len {
             for num in 0..self.node_count {
-                self.nodes[num].weights[prev_num] -= deltas[num] * previous_layer_values[prev_num] * learning_rate;
+                self.nodes[num].weights[prev_layer_num] -= deltas[num] * previous_layer_values[prev_layer_num] * learning_rate;
             }
         }
         for num in 0..self.node_count {
@@ -232,7 +236,7 @@ impl Network {
         values
     }
 
-    // pub fn find_make_adjust(&mut self, inputs: &Vec<f32>, desired_outputs:&Vec<f32>) {
+    // pub fn old_find_make_adjust(&mut self, inputs: &Vec<f32>, desired_outputs:&Vec<f32>) {
     // //Finds out how the weights and biases should be adjusted, based on the difference between the results of the calculate function and the desired outputs.
     // //It does it in reverse order, because that's how you have to do it.
     // //Then it implements all of the changes after they have all been calculated. That doesn't have to be done in reverse order, so it isn't.
@@ -250,17 +254,17 @@ impl Network {
     //     }
     // }
 
-    pub fn alt_find_make_adjust(&mut self, inputs: &Vec<f32>, desired_outputs:&Vec<f32>) {
+    pub fn find_make_adjust(&mut self, inputs: &Vec<f32>, desired_outputs:&Vec<f32>) {
+        let values = self.calculate(inputs);
         let mut delta_matrix = vec![Vec::new(); self.layer_count];
-        delta_matrix[self.layer_count-1] = self.layers[self.layer_count-1].find_deltas(&values[self.layer_count-1], desired_outputs, &Layer::new(0, 0), Vec::new());
+        delta_matrix[self.layer_count-1] = self.layers[self.layer_count-1].find_deltas(&values[self.layer_count-1], desired_outputs, &Layer::new(0, 0), &Vec::new());
         for num in (0..self.layer_count-1).rev() {
-            delta_matrix[num] = self.layers[num].find_deltas(&values[num], &Vec::new(), self.layers[num+1], &delta_matrix[num+1]);
+            delta_matrix[num] = self.layers[num].find_deltas(&values[num], &Vec::new(), &self.layers[num+1], &delta_matrix[num+1]);
         }
 
-        let values = self.calculate(inputs);
-        self.layers[0].alt_adjust(delta_matrix[0], inputs, self.learning_rate)
+        self.layers[0].adjust(&delta_matrix[0], inputs, self.learning_rate);
         for num in 1..self.layer_count {
-            self.layers[num].alt_adjust(delta_matrix[num], values[num-1], self.learning_rate)
+            self.layers[num].adjust(&delta_matrix[num], &values[num-1], self.learning_rate)
         }
     }
 }

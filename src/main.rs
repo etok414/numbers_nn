@@ -1,9 +1,9 @@
-extern crate rand;
-
 use nannou::prelude::*;
 use std::thread::sleep;
 use std::time;
-use rand::Rng;
+
+pub mod nodes_layers;
+pub mod unpacking;
 
 fn main() {
 
@@ -39,7 +39,7 @@ fn update(_app: &App, model: &mut Model, _update: Update) {
     if 5 > 4 {
         println!("time: ");
 
-        sleep(time::Duration::new(0, 500000000)); // sec, nano sec
+        sleep(time::Duration::new(0, 500_000_000)); // sec, nano sec
     }
 }
 
