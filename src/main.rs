@@ -1,9 +1,9 @@
 use nannou::prelude::*;
-use std::thread::sleep;
-use std::time;
+// use std::thread::sleep;
+// use std::time;
 
 pub mod nodes_layers;
-pub mod unpacking;
+pub mod inout;
 
 fn main() {
 
@@ -15,9 +15,11 @@ fn main() {
 struct Model {
     _window: WindowId,
     network: nodes_layers::Network,
-    training_images: Vec<Vec<f32>>,
-    training_labels: Vec<Vec<f32>>,
-    counter: usize,
+    is_training: bool,
+    images: Vec<Vec<f32>>,
+    labels: Vec<Vec<f32>>,
+    pos_counter: usize,
+    success_counter: usize,
 }
 
 fn model(app: &App) -> Model {
@@ -29,34 +31,79 @@ fn model(app: &App) -> Model {
     .view(view)
     .build()
     .unwrap();
-
-    let network = nodes_layers::Network::new(vec![28*28, 16, 16, 9], 0.5);
-    let training_images = unpacking::unpack_images(r".\datas\train-images.idx3-ubyte");
-    let training_labels = unpacking::unpack_labels(r".\datas\train-labels.idx1-ubyte");
-    let training_labels = unpacking::turn_to_result(training_labels);
-    let counter = 0;
+    let mut network = nodes_layers::Network::new(&[0,0], 0.0);
+    let args: Vec<String> = std::env::args().collect();
+    let is_training = match args[1].as_str() {
+        "training" => true,
+        "testing" => false,
+        _ => panic!("Invalid parameters"),
+    };
+    if is_training && args[2] == "new" {
+        network = nodes_layers::Network::new(&[28*28, 16, 16, 10], 0.5);
+    } else {
+        network = inout::read_network(vec![
+            r"datas\network1.csv",
+            r"datas\network2.csv",
+            r"datas\network3.csv",
+            ], 0.5).expect("Something went wrong while reading the network");
+    }
+    let images = if is_training {
+            inout::unpack_images(r".\datas\train-images.idx3-ubyte")
+        } else {
+            inout::unpack_images(r".\datas\t10k-images.idx3-ubyte")
+        };
+    let labels = if is_training {
+            inout::unpack_labels(r".\datas\train-labels.idx1-ubyte")
+        } else {
+            inout::unpack_labels(r".\datas\t10k-labels.idx1-ubyte")
+        };
+    let labels = inout::turn_to_result(labels);
+    let pos_counter = 0;
+    let success_counter = 0;
 
     Model {
         _window,
         network,
-        training_images,
-        training_labels,
-        counter,
+        is_training,
+        images,
+        labels,
+        pos_counter,
+        success_counter,
     }
 }
 
 
 fn update(_app: &App, model: &mut Model, _update: Update) {
 
-    //if model.time % 512 < 16 {
-        // println!("time: {:?} cost: {:?}", model.time, find_cost(model));
-    model.network.find_make_adjust(&model.training_images[model.counter], &model.training_labels[model.counter]);
-    model.counter += 1;
-    if 5 > 4 {
-        println!("time: ");
-
-        sleep(time::Duration::new(0, 500_000_000)); // sec, nano sec
+    if model.network.compare_success(&model.images[model.pos_counter], &model.labels[model.pos_counter], 0.5) {
+        model.success_counter += 1;
     }
+    if model.is_training {
+        model.network.find_make_adjust(&model.images[model.pos_counter], &model.labels[model.pos_counter]);
+    }
+    model.pos_counter += 1;
+    if model.pos_counter % 1000 == 0 {
+    // if model.pos_counter % 10000 == 0 {
+        println!("{:?} Total successes thus far: {:?}", model.pos_counter, model.success_counter);
+    }
+    if model.pos_counter >= model.images.len() {
+        println!("Number of successes: {:?}", model.success_counter);
+        println!("Number of attempts: {:?}", model.images.len());
+        if model.is_training {
+            let file_paths = vec![
+                r"datas\network1.csv",
+                r"datas\network2.csv",
+                r"datas\network3.csv",
+            ];
+            inout::write_network(model.network.clone(), file_paths).expect("Something went wrong with writing the data");
+            println!("Data successfully written to file!");
+        }
+    }
+    // if 5 > 4 {
+    //     println!("time: ");
+    //
+    //     sleep(time::Duration::new(0, 500_000_000)); // sec, nano sec
+    // }
 }
 
 
@@ -71,19 +118,20 @@ fn view(app: &App, model: &Model, frame: &Frame) {
 
 fn draw_results(model: &Model, draw: &nannou::app::Draw) {
 
-    // let sq_col = 255.0; // model.input
-    // let cir_col = 255.0; // model.output
-
-    for y in (0..28).rev() {
+    for y in 0..28 {
         for x in 0..28 {
-            let sq_col = model.training_images[model.counter][y*28 + x] * 255.0;
-            draw.rect().x_y(2.0 * x as f32 - 200.0, 2.0 * y as f32 + 50.0).w_h(2.0, 2.0)
+            let sq_col = model.images[model.pos_counter][y*28 + x];
+            draw.rect().x_y(2.0 * x as f32 - 200.0, -2.0 * y as f32 + 50.0).w_h(2.0, 2.0)
                             .color(rgb(sq_col, sq_col, sq_col));
         }
     }
-    for y in 0..9 {
-        let cir_col = model.training_labels[model.counter][y] * 255.0;
-        draw.ellipse().x_y(200.0, 10.0 * y as f32).radius(6.0)
+    let values = model.network.calculate(&model.images[model.pos_counter]);
+    for y in 0..10 {
+        let cir_col = values[values.len()-1][y];
+        draw.ellipse().x_y(200.0, 12.0 * y as f32).radius(6.0)
                            .color(rgb(cir_col, cir_col, cir_col));
+        let cir_col = model.labels[model.pos_counter][y];
+        draw.ellipse().x_y(212.0, 12.0 * y as f32).radius(6.0)
+                          .color(rgb(cir_col, cir_col, cir_col));
     }
 }

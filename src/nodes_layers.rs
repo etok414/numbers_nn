@@ -5,9 +5,9 @@ use rand::Rng;
 #[derive(Clone)]
 pub struct Node {
 // A node/neuron's bias and the weights of its connections to the previous layer.
-    bias: f32,
-    weights: Vec<f32>,
-    personal_pos: usize,
+    pub bias: f32,
+    pub weights: Vec<f32>,
+    pub personal_pos: usize,
     // bias_adjust: Option<f32>,
     // weight_adjusts: Vec<f32>,
 }
@@ -24,7 +24,7 @@ impl Node {
             init_weights[n] = 2.0 * x  - 1.0;  // The initial weights will be in [-1; 1[
         }
         let x: f32 = rng.gen();  // Random number in the interval [0; 1[
-        let init_bias = 2.0 * x  - 1.0;  // The initial weights will be in [-1; 1[
+        let init_bias = 2.0 * x  - 1.0;  // The initial bias will be in [-1; 1[
 
         Node {
             bias: init_bias,
@@ -77,11 +77,25 @@ impl Node {
     // }
 }
 
+impl IntoIterator for Node {
+    type Item = String;
+    type IntoIter = ::std::vec::IntoIter<Self::Item>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        let mut output = Vec::new();
+        output.push(self.bias.to_bits().to_string());
+        for weight in self.weights {
+            output.push(weight.to_bits().to_string())
+        }
+        output.into_iter()
+    }
+}
+
 #[derive(Clone)]
 pub struct Layer {
 //A layer of nodes, their biases, and the weights of their connections to the previous layer.
-    nodes: Vec<Node>,
-    node_count: usize, //Should be equal to nodes.len() and shouldn't change.
+    pub nodes: Vec<Node>,
+    pub node_count: usize, //Should be equal to nodes.len() and shouldn't change.
 }
 
 impl Layer {
@@ -137,14 +151,15 @@ impl Layer {
     }
 }
 
+#[derive(Clone)]
 pub struct Network {
-    layers: Vec<Layer>,
-    layer_count: usize,
-    learning_rate: f32,
+    pub layers: Vec<Layer>,
+    pub layer_count: usize,
+    pub learning_rate: f32,
 }
 
 impl Network {
-    pub fn new(node_nums:Vec<usize>, learning_rate: f32) -> Network {
+    pub fn new(node_nums:&[usize], learning_rate: f32) -> Network {
         let mut layers = Vec::new();
         for layer_num in 1..node_nums.len() {
             layers.push(Layer::new(node_nums[layer_num-1], node_nums[layer_num]));
@@ -179,5 +194,16 @@ impl Network {
         for num in 1..self.layer_count {
             self.layers[num].adjust(&delta_matrix[num], &values[num-1], self.learning_rate)
         }
+    }
+
+    pub fn compare_success(&self, inputs: &Vec<f32>, desired_outputs:&Vec<f32>, margin_of_error:f32) -> bool {
+        let values = &self.calculate(inputs)[self.layer_count - 1];
+        let mut within_margin = true;
+        for num in 0..desired_outputs.len() {
+            if (desired_outputs[num] - values[num]).powi(2) > margin_of_error.powi(2) {
+                within_margin = false;
+            }
+        }
+        within_margin
     }
 }
