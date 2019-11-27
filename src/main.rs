@@ -19,7 +19,8 @@ struct Model {
     images: Vec<Vec<f32>>,
     labels: Vec<Vec<f32>>,
     pos_counter: usize,
-    success_counter: usize,
+    marg_success: usize,
+    biggest_success: usize,
 }
 
 fn model(app: &App) -> Model {
@@ -31,22 +32,22 @@ fn model(app: &App) -> Model {
     .view(view)
     .build()
     .unwrap();
-    let mut network = nodes_layers::Network::new(&[0,0], 0.0);
     let args: Vec<String> = std::env::args().collect();
     let is_training = match args[1].as_str() {
         "training" => true,
         "testing" => false,
         _ => panic!("Invalid parameters"),
     };
-    if is_training && args[2] == "new" {
-        network = nodes_layers::Network::new(&[28*28, 16, 16, 10], 0.5);
-    } else {
-        network = inout::read_network(vec![
-            r"datas\network1.csv",
-            r"datas\network2.csv",
-            r"datas\network3.csv",
-            ], 0.5).expect("Something went wrong while reading the network");
-    }
+    let network = if is_training && args[args.len()-1] == "new" {
+            nodes_layers::Network::new(&[28*28, 28*7, 64, 16, 10], 0.5)
+        } else {
+            inout::read_network(vec![
+                r"datas\network1.csv",
+                r"datas\network2.csv",
+                r"datas\network3.csv",
+                r"datas\network4.csv",
+            ], 0.5).expect("Something went wrong while reading the network")
+        };
     let images = if is_training {
             inout::unpack_images(r".\datas\train-images.idx3-ubyte")
         } else {
@@ -59,7 +60,8 @@ fn model(app: &App) -> Model {
         };
     let labels = inout::turn_to_result(labels);
     let pos_counter = 0;
-    let success_counter = 0;
+    let marg_success = 0;
+    let biggest_success = 0;
 
     Model {
         _window,
@@ -68,15 +70,18 @@ fn model(app: &App) -> Model {
         images,
         labels,
         pos_counter,
-        success_counter,
+        marg_success,
+        biggest_success,
     }
 }
 
 
 fn update(_app: &App, model: &mut Model, _update: Update) {
-
     if model.network.compare_success(&model.images[model.pos_counter], &model.labels[model.pos_counter], 0.5) {
-        model.success_counter += 1;
+        model.marg_success += 1;
+    }
+    if nodes_layers::find_biggest(&model.labels[model.pos_counter]).1 == nodes_layers::find_biggest(&model.network.calculate(&model.images[model.pos_counter])[model.network.layer_count-1]).1 {
+        model.biggest_success += 1;
     }
     if model.is_training {
         model.network.find_make_adjust(&model.images[model.pos_counter], &model.labels[model.pos_counter]);
@@ -84,19 +89,21 @@ fn update(_app: &App, model: &mut Model, _update: Update) {
     model.pos_counter += 1;
     if model.pos_counter % 1000 == 0 {
     // if model.pos_counter % 10000 == 0 {
-        println!("{:?} Total successes thus far: {:?}", model.pos_counter, model.success_counter);
+        println!("{:?} marg_success: {:?} biggest_success: {:?}", model.pos_counter, model.marg_success, model.biggest_success);
     }
     if model.pos_counter >= model.images.len() {
-        println!("Number of successes: {:?}", model.success_counter);
+        println!("Number of successes according to the margin calculation: {:?}", model.marg_success);
+        println!("Number of successes according to the find_biggest calculation: {:?}", model.biggest_success);
         println!("Number of attempts: {:?}", model.images.len());
         if model.is_training {
             let file_paths = vec![
                 r"datas\network1.csv",
                 r"datas\network2.csv",
                 r"datas\network3.csv",
+                r"datas\network4.csv",
             ];
             inout::write_network(model.network.clone(), file_paths).expect("Something went wrong with writing the data");
-            println!("Data successfully written to file!");
+            println!("Data successfully written to files!");
         }
     }
     // if 5 > 4 {

@@ -6,6 +6,9 @@ use std::fs;
 use crate::nodes_layers;
 
 pub fn unpack_labels(filename: &str) -> Vec<u8> {
+    //Unpacks a file assuming it's a list of labels for MNIST images of numbers.
+    //By default, this is in the form of u8s that are equal to the number displayed.
+    //To convert them to output values that work with the nodes_layers::Network struct, use turn_to_result
     let content = fs::read(filename)
         .expect("Something went wrong while reading labels")
         [8..].to_vec();
@@ -13,6 +16,7 @@ pub fn unpack_labels(filename: &str) -> Vec<u8> {
 }
 
 pub fn turn_to_result(input: Vec<u8>) -> Vec<Vec<f32>> {
+    //Turns a list of u8 values into vectors that can be used by the nodes_layers::Network struct.
     let mut output = Vec::new();
     for number in input {
         let mut element = vec![0.0;10];
@@ -23,22 +27,26 @@ pub fn turn_to_result(input: Vec<u8>) -> Vec<Vec<f32>> {
 }
 
 pub fn unpack_images(filename: &str) -> Vec<Vec<f32>> {
-        let raw_content = fs::read(filename)
-            .expect("Something went wrong while reading images")
-            [16..].to_vec();
-        let raw_content = turn_to_float(raw_content);
-        let content_as_iter = raw_content.chunks_exact(28*28);
-        if content_as_iter.remainder().len() > 0 {
-            panic!("An image was only partially formed. It had only {:?} elements, when it should have {:?}", content_as_iter.remainder().len(), 28*28)
-        }
-        let mut content = Vec::new();
-        for chonk in content_as_iter {
-            content.push(chonk.to_vec());
-        }
-        content
+    //Unpacks a file assuming it's a list of images of handwritten digits from the MNIST database.
+    //It also turns them into vectors to be used as inputs by the nodes_layers::Network struct.
+    //Since the values are by default u8 values between 0 and 255, and the nodes_layers::Network struct only accepts f32 values between 0.0 and 1.0, turn_to_float is used on them.
+    let raw_content = fs::read(filename)
+        .expect("Something went wrong while reading images")
+        [16..].to_vec();
+    let raw_content = turn_to_float(raw_content);
+    let content_as_iter = raw_content.chunks_exact(28*28);
+    if content_as_iter.remainder().len() > 0 {
+        panic!("An image was only partially formed. It had only {:?} elements, when it should have had {:?}", content_as_iter.remainder().len(), 28*28)
+    }
+    let mut content = Vec::new();
+    for chonk in content_as_iter {
+        content.push(chonk.to_vec());
+    }
+    content
 }
 
 pub fn turn_to_float(input: Vec<u8>) -> Vec<f32> {
+    //Turns a Vec of u8 values between 0 and 255 into a Vec f32 values between 0.0 and 1.0
     let mut output = Vec::new();
     for number in input {
         output.push(number as f32 / 255.0)
@@ -48,6 +56,8 @@ pub fn turn_to_float(input: Vec<u8>) -> Vec<f32> {
 
 
 pub fn write_network(network: nodes_layers::Network, file_paths: Vec<&str>) -> Result<(), Box<dyn Error>> {
+    //Takes a nodes_layers::Network and writes it onto a series of .csv files. Each file represents a layer, and each line is a node.
+    //The first value of a line is the node's bias, and the rest are its weights. They are written as u32 values to make them easier to read for read_network.
     if network.layer_count != file_paths.len() {
         panic!("Missing proper error implementation, and the number of file paths doesn't match the number of layers")
     }
@@ -91,6 +101,7 @@ pub fn read_network(file_paths: Vec<&str>, learning_rate:f32) -> Result<nodes_la
             nodes_layers::Layer{
                 nodes: nodes,
                 node_count: node_count,
+                learning_rate: learning_rate,
             }
         )
     }
@@ -98,6 +109,6 @@ pub fn read_network(file_paths: Vec<&str>, learning_rate:f32) -> Result<nodes_la
     Ok(nodes_layers::Network{
         layers: layers,
         layer_count: layer_count,
-        learning_rate: learning_rate,
+        // learning_rate: learning_rate,
     })
 }
