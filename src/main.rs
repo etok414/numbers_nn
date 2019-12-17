@@ -38,15 +38,20 @@ fn model(app: &App) -> Model {
         "testing" => false,
         _ => panic!("Invalid parameters"),
     };
+    let network_form = &[28*28, 28*7, 64, 16, 10];
     let network = if is_training && args[args.len()-1] == "new" {
-            nodes_layers::Network::new(&[28*28, 28*7, 64, 16, 10], 0.5)
+            nodes_layers::Network::new(network_form, 0.5)
         } else {
             inout::read_network(vec![
                 r"datas\network1.csv",
                 r"datas\network2.csv",
                 r"datas\network3.csv",
                 r"datas\network4.csv",
-            ], 0.5).expect("Something went wrong while reading the network")
+            ],
+            network_form,
+            0.5,
+            is_training,
+            ).expect("Something went wrong while reading the network")
         };
     let images = if is_training {
             inout::unpack_images(r".\datas\train-images.idx3-ubyte")
